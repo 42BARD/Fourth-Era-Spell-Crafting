@@ -8,7 +8,7 @@ Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemRefere
     EndIf
 EndEvent
 
-Event OnSpellCast(Form akSpell)
+Event OnSpellCast(Form akSpell);This is just for testing, not in the PEX that was uploaded to Nexus
     Spell theSpell = akSpell as Spell
     int index = 0
     While (index < theSpell.GetNumEffects())
@@ -22,4 +22,5 @@ Event OnSpellCast(Form akSpell)
     ;/Spell NewSpell = DynamicPersistentForms.Create(theSpell) as Spell
     NewSpell.SetName(2)
     Game.GetPlayer().AddSpell(NewSpell)/;
+
 EndEvent
