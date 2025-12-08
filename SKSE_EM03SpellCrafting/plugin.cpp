@@ -464,7 +464,8 @@ void __stdcall UI::SpellCraftMenu::RenderWindow() {
 
 
 
-void GenSpellSchoolMenu(std::vector<RE::SpellItem*> School, ImVec4 Color, const char* Title, std::string_view SearchText) {  // I couldn't think of a name
+void GenSpellSchoolMenu(std::vector<RE::SpellItem*> School, ImGuiMCP::ImVec4 Color, const char* Title, std::string_view SearchText) { //I couldn't think of a name
+    using namespace ImGuiMCP;
     ImGui::TextColored(Color, Title);
     for (auto Spell : School) {
         std::string SpellName = Spell->GetFullName();

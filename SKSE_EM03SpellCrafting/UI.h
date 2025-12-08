@@ -2,6 +2,7 @@
 #include "SKSEMenuFramework.h"
 
 namespace UI {
+    using namespace ImGuiMCP;
     inline bool ChangeE1 = false;
     inline bool ShowPerkEffects = true;
     inline float BCostMult = 1.0;
