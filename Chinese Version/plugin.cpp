@@ -3,6 +3,8 @@
 #include<algorithm>
 #include<string_view>
 #include <spdlog/sinks/basic_file_sink.h>
+#include <string>
+#include <sstream>
 
 namespace logger = SKSE::log;
 
@@ -173,12 +175,228 @@ void GiveSettings(RE::StaticFunctionTag*, int32_t TomeCost, int32_t EffectCost1,
     UI::SliderMax = SliderMax1;
     UI::MCP::ShowOgCost = ShowogCost1;
 }
+//function GiveESLArrays(Form[] SpellstoChange, Form[] ESLSpells1) global native
+void ReturnESLEffects(RE::StaticFunctionTag*, const std::vector<RE::TESForm*> SpellstoChange,
+                      const std::vector<RE::TESForm*>ESLSpells1, const std::vector<int> LastEffect1,
+                      const std::vector<RE::TESForm*> spellModels1, const std::vector<int> Magnitudes1,
+                      const std::vector<int> Areas1, const std::vector<int> Durations1,
+                      const std::vector<float> Costs1) {
+    
+    constexpr std::string_view kNameId = "EM03ID_"sv;
+    int LastEffectStart = 0;
+    for (std::size_t i = 0; i < SpellstoChange.size(); i++) {
+        auto* form = SpellstoChange[i];
+        RE::SpellItem* SpelltoEdit = nullptr;
+
+        if (form && form->GetFormType() == RE::FormType::Spell) {
+            SpelltoEdit = form->As<RE::SpellItem>();
+
+        } else if (i != SpellstoChange.size() - 1) {
+            logger::error("Spell is null or not a spell at index {}", i);
+            continue;
+        } else {
+            break;
+        }
+
+        auto* form3 = spellModels1[i];
+        RE::SpellItem* SpellModel = nullptr;
+
+        if (form3 && form3->GetFormType() == RE::FormType::Spell) {
+            SpellModel = form3->As<RE::SpellItem>();
+        } else {
+            logger::error("SpellModel is null or not a spell at index {}", i);
+            continue;
+        }
+
+        auto* SpellMenuObject = SpellModel->GetMenuDisplayObject();
+        if (SpellMenuObject) {
+            SpelltoEdit->menuDispObject = SpellMenuObject;
+        } else {
+            logger::error("The SpelltoAdd '{}' has no Menu Display Object", SpellModel->GetFullName());
+        }
+        
+        auto* theEffect = SpelltoEdit->effects[0]->baseEffect;
+        auto* mgefBase = SpellModel->effects[0]->baseEffect;
+        std::string_view Name = theEffect->GetFullName();
+        if (Name == kNameId) {
+            theEffect->data.delivery = SpelltoEdit->GetDelivery();
+            theEffect->data.castingType = SpelltoEdit->GetCastingType();
+            if (mgefBase->data.light) {
+                theEffect->data.light = mgefBase->data.light;
+            }
+            if (mgefBase->data.hitVisuals) {
+                theEffect->data.hitVisuals = mgefBase->data.hitVisuals;
+            }
+            if (mgefBase->data.projectileBase) {
+                theEffect->data.projectileBase = mgefBase->data.projectileBase;
+            }
+            if (mgefBase->data.explosion) {
+                theEffect->data.explosion = mgefBase->data.explosion;
+            }
+            if (mgefBase->data.castingArt) {
+                theEffect->data.castingArt = mgefBase->data.castingArt;
+            }
+            if (mgefBase->data.hitEffectArt) {
+                theEffect->data.hitEffectArt = mgefBase->data.hitEffectArt;
+            }
+            if (mgefBase->data.impactDataSet) {
+                theEffect->data.impactDataSet = mgefBase->data.impactDataSet;
+            }
+            if (mgefBase->data.imageSpaceMod) {
+                theEffect->data.imageSpaceMod = mgefBase->data.imageSpaceMod;
+            }
+
+            theEffect->menuDispObject = mgefBase->GetMenuDisplayObject();
+
+            theEffect->data.castingSoundLevel = mgefBase->data.castingSoundLevel;
+
+            theEffect->effectSounds.clear();
+            for (auto& sound : mgefBase->effectSounds) {
+                theEffect->effectSounds.push_back(sound);
+            }
+        }
+
+        for (int i1 = LastEffectStart; i1 <= LastEffect1[i]; i1++) {
+            auto* form2 = ESLSpells1[i1];
+            RE::EffectSetting* EffecttoAdd = nullptr;
+            if (form2) {
+                if (form2->GetFormType() == RE::FormType::MagicEffect) {
+                    EffecttoAdd = form2->As<RE::EffectSetting>();
+                } else {
+                    logger::error("Saved Effect Not a Magic Effect at index {}", i1);
+                }
+            } else {
+                logger::error("Saved Effect is null at index {}", i1);
+                continue;
+            }
+
+            auto newEffect = new RE::Effect();
+            
+            newEffect->cost = Costs1[i1];
+            newEffect->baseEffect = EffecttoAdd;
+            newEffect->effectItem.magnitude = Magnitudes1[i1];
+            newEffect->effectItem.area = Areas1[i1];
+            newEffect->effectItem.duration = Durations1[i1];
+
+            SpelltoEdit->effects.push_back(newEffect);
+        }
+        LastEffectStart = LastEffect1[i] + 1;
+    }
+}
+
+void EraseArrayData(RE::StaticFunctionTag*, std::vector<RE::TESForm*> SpellstoChange,
+                      std::vector<RE::TESForm*> ESLSpells1, std::vector<int> LastEffect1,
+                      std::vector<RE::TESForm*> spellModels1, std::vector<int> Magnitudes1,
+                      std::vector<int> Areas1, std::vector<int> Durations1,
+                      std::vector<float> Costs1, RE::TESForm* FormtoErase) {
+    int i = 0;
+    for (RE::TESForm* FormChecked : SpellstoChange) {
+        if (!FormChecked) {
+            if (i < SpellstoChange.size() - 1) {
+                logger::error("nullprt at {}", i);
+                i++;
+                continue;
+            } else {
+                return;
+            }
+        } else if (FormChecked == FormtoErase) {
+            break;
+        }
+        i++;
+    }
+    
+    if ( i>= SpellstoChange.size()) {
+        logger::error("SpellstoChange out of range at index ", i);
+        return;
+    }
+    SpellstoChange.erase(SpellstoChange.begin() + i);
+    if (i >= spellModels1.size()) {
+        logger::error("SpellModels out of range at index ", i);
+       return;
+    }
+    spellModels1.erase(spellModels1.begin() + i);
+    
+    int LastEffectStart = 0;
+    if (i > 0) {
+        LastEffectStart = LastEffect1[i - 1] + 1;
+    }
+    int NumEffects = 0;
+
+     for (int i1 = LastEffect1[i]; i1 >= LastEffectStart; i1--) {
+        
+         if (i1 >= ESLSpells1.size()) {
+            logger::error("ESLSpells out of range at i1: {}", i1);
+            return;
+         } 
+        ESLSpells1.erase(ESLSpells1.begin() + i1);
+        if (i1 >= Magnitudes1.size()) {
+            logger::error("Magnitudes1 out of range at i1: {}", i1);
+            return;
+        }
+        Magnitudes1.erase(Magnitudes1.begin() + i1);
+        if (i1 >= Areas1.size()) {
+            logger::error("Areas1 out of range at i1: {}", i1);
+            return;
+        }
+        Areas1.erase(Areas1.begin() + i1);
+        if (i1 >= Durations1.size()) {
+            logger::error("Durations1 out of range at i1: {}", i1);
+            return;
+        }
+        Durations1.erase(Durations1.begin() + i1);
+        if (i1 >= Costs1.size()) {
+            logger::error("Costs1 out of range at i1: {}", i1);
+            return;
+        }
+        Costs1.erase(Costs1.begin() + i1);
+        NumEffects++;
+    }
+     for (int i2 = i + 1; i2 < LastEffect1.size(); i2++) {
+         LastEffect1[i2] -= NumEffects;
+     }
+      if (i >= LastEffect1.size()) {
+         logger::error("LastEffect1 out of range at index ", i);
+         return;
+     }
+    LastEffect1.erase(LastEffect1.begin() + i);
+    
+    auto* args = RE::MakeFunctionArguments(
+        (std::vector<RE::TESForm*>)SpellstoChange, (std::vector<RE::TESForm*>)ESLSpells1, (std::vector<int>)LastEffect1,
+        (std::vector<RE::TESForm*>)spellModels1, (std::vector<int>) Magnitudes1,
+                                  (std::vector<int>)Areas1, (std::vector<int>)Durations1, (std::vector<float>)Costs1);
+    CallPapyrusFunction("ApplyArrays", args);
+}
+
+bool CheckifESLFlagged(RE::StaticFunctionTag*, RE::TESForm* theForm) {
+    if (!theForm) {
+        return false;
+    }
+    auto file = theForm->GetFile();
+    if (file->IsLight()) {
+        auto fileName = file->GetFilename();
+        if (fileName.size() > 4) {
+            auto ext = fileName.substr(fileName.size() - 4);
+            if (ext == ".esp") {
+                return true;
+            }
+        } else {
+            logger::error("FileName is smaller than 4 characters?");
+        }
+    }
+    return false;
+}
+
+
+
 
 bool PapyrusFunctions(RE::BSScript::IVirtualMachine * vm) { 
     vm->RegisterFunction("OpenSpellCraftMenu", "EM03SKSEFunctions", OpenSpellCraftMenu);
     vm->RegisterFunction("OpenChoseSpellMenu", "EM03SKSEFunctions", OpenChoseSpellMenu);
     vm->RegisterFunction("SetEffectStuff", "EM03SKSEFunctions", SetEffectStuff);
     vm->RegisterFunction("GiveSettings", "EM03SKSEFunctions", GiveSettings);
+    vm->RegisterFunction("ReturnESLEffects", "EM03SKSEFunctions", ReturnESLEffects);
+    vm->RegisterFunction("EraseArrayData", "EM03SKSEFunctions", EraseArrayData);
+    vm->RegisterFunction("CheckifESLFlagged", "EM03SKSEFunctions", CheckifESLFlagged);
     return true; }
 
 
@@ -245,6 +463,7 @@ const char* GetSchoolS(RE::ActorValue Skill) {
 }
 
 
+
 void StopSpellCrafting(bool cancelled, bool noName) {
     using namespace UI;
     using namespace SpellCraftMenu;
@@ -272,7 +491,7 @@ void StopSpellCrafting(bool cancelled, bool noName) {
                 (RE::BSFixedString)SpellNameStr, (std::vector<RE::EffectSetting*>)SpellEffects,
                 (std::vector<int32_t>)MagList, (std::vector<int32_t>)AreaList, (std::vector<int32_t>)DurationList,
                 (int32_t)OverSchoolInt, (std::vector<float>)CostList, (RE::SpellItem*)OverideBase,
-                (int32_t)HighestCostid, (bool)OverideEffect);
+                (int32_t)HighestCostid, (bool)OverideEffect, (std::vector<RE::SpellItem*>)SourceSpells);
             CallPapyrusFunction("CraftTheSpell", args);
         }
     }
@@ -325,6 +544,7 @@ void __stdcall UI::SpellCraftMenu::RenderWindow() {
     }
     ImGui::Begin(reinterpret_cast<const char*>(u8"无派系##EM03SpellCrafting"), nullptr, ImGuiWindowFlags_None);  //Craft Spell
     
+
     if (ImGui::Button(reinterpret_cast<const char*>(u8"取消"))) { //Cancel
         StopSpellCrafting(true, false);
         CallPapyrusFunction("CloseBook", RE::MakeFunctionArguments());
@@ -463,9 +683,11 @@ void __stdcall UI::SpellCraftMenu::RenderWindow() {
 
 
 
-void GenSpellSchoolMenu(std::vector<RE::SpellItem*> School, ImGuiMCP::ImVec4 Color, const char8_t* Title,std::string_view SearchText) {  
+
+void GenSpellSchoolMenu(std::vector<RE::SpellItem*> School, ImGuiMCP::ImVec4 Color, const char* Title,
+                        std::string_view SearchText) {  // I couldn't think of a name
     using namespace ImGuiMCP;
-    ImGui::TextColored(Color, reinterpret_cast<const char*>(Title));
+    ImGui::TextColored(Color, Title);
     for (auto Spell : School) {
         std::string SpellName = Spell->GetFullName();
         if (UI::ChoseEffectMenu::Searching && !SpellName.starts_with(SearchText)) {
@@ -486,6 +708,29 @@ void GenSpellSchoolMenu(std::vector<RE::SpellItem*> School, ImGuiMCP::ImVec4 Col
                 auto Delivery = Spell->GetDelivery();
                 auto Player = RE::PlayerCharacter::GetSingleton();
                 bool check = UI::ShowPerkEffects && Delivery == RE::MagicSystem::Delivery::kSelf;
+                int OCost = -1;
+                bool AEC0 = false; //All Effects Cost 0
+                if (!Spell->IsAutoCalc()) {
+                    float CostSum = 0;
+                    int numImEffects = 0;
+                    for (auto& effectItem : Spell->effects) {
+                        auto EffectCost = effectItem->cost;
+                        CostSum = CostSum + EffectCost; 
+                        if (EffectCost > 0.01) {
+                            numImEffects++;
+                        }
+                    }
+                    auto theCost = Spell->data.costOverride;
+                     if (CostSum != theCost) {
+                        if (numImEffects == 0) {
+                             logger::info("All effects costed 0");
+                            AEC0 = true;
+                            OCost = theCost / Spell->effects.size();
+                        } else {
+                             OCost = theCost / numImEffects;
+                        }
+                     }
+                }
                 for (auto& effectItem : Spell->effects) {
                     auto& Conditions = effectItem->conditions;
                     if (check && !Conditions.IsTrue(Player, Player)) {
@@ -505,8 +750,12 @@ void GenSpellSchoolMenu(std::vector<RE::SpellItem*> School, ImGuiMCP::ImVec4 Col
                     UI::SpellCraftMenu::SourceSpells.push_back(Spell); 
 
                     float BaseCost1 = mgef->data.baseCost;
+                    
+                    if ((OCost != -1 && Cost > 0.01) || AEC0) {
+                        Cost = OCost;
+                    }
                     float TrueBaseCost = 0;
-                    if (BaseCost1 > 0.01) {
+                    if (BaseCost1 > 0.01 || AEC0) {
                         float calcCost = powf((std::max(Mag, 1.0f) * std::max(Duration / 10.0f, 1.0f)), 1.1);
                         TrueBaseCost = (Cost / calcCost) * UI::BCostMult;
                     }
@@ -572,12 +821,12 @@ void __stdcall UI::ChoseEffectMenu::RenderWindow() {
         }
         ImGui::BeginChild(reinterpret_cast<const char*>(u8"Scrolling"));
 
-        if (!AltSpells.empty()) {GenSpellSchoolMenu(AltSpells, ImVec4(0, 0, 1, 1), u8"变化系法术", searchText);}//Alteration Spells
-        if (!ConSpells.empty()) {GenSpellSchoolMenu(ConSpells, ImVec4(0.5, 0, 0.5, 1), u8"召唤系法术", searchText);}//Con
-        if (!DesSpells.empty()) {GenSpellSchoolMenu(DesSpells, ImVec4(1, 0, 0, 1), u8"毁灭系法术", searchText);}//Des
-        if (!IllSpells.empty()) {GenSpellSchoolMenu(IllSpells, ImVec4(0, 1, 1, 1), u8"幻术系法术", searchText);}//Ill
-        if (!ResSpells.empty()) {GenSpellSchoolMenu(ResSpells, ImVec4(1, 1, 0, 1), u8"恢复系法术", searchText);}//Res
-        if (!ElseSpells.empty()) {GenSpellSchoolMenu(ElseSpells, ImVec4(1, 0, 1, 1), u8"其他法术（无派系）", searchText);} //Other Spells (No School)
+        if (!AltSpells.empty()) {GenSpellSchoolMenu(AltSpells, ImVec4(0, 0, 1, 1), reinterpret_cast < const char*>(u8"变化系法术"), searchText);}//Alteration Spells
+        if (!ConSpells.empty()) {GenSpellSchoolMenu(ConSpells, ImVec4(0.5, 0, 0.5, 1), reinterpret_cast < const char*>(u8"召唤系法术"), searchText);}//Con
+        if (!DesSpells.empty()) {GenSpellSchoolMenu(DesSpells, ImVec4(1, 0, 0, 1), reinterpret_cast < const char*>(u8"毁灭系法术"), searchText);}//Des
+        if (!IllSpells.empty()) {GenSpellSchoolMenu(IllSpells, ImVec4(0, 1, 1, 1), reinterpret_cast < const char*>(u8"幻术系法术"), searchText);}//Ill
+        if (!ResSpells.empty()) {GenSpellSchoolMenu(ResSpells, ImVec4(1, 1, 0, 1), reinterpret_cast < const char*>(u8"恢复系法术"), searchText);}//Res
+        if (!ElseSpells.empty()) {GenSpellSchoolMenu(ElseSpells, ImVec4(1, 0, 1, 1), reinterpret_cast < const char*>(u8"其他法术（无派系）"), searchText);} //Other Spells (No School)
 
         if (!LearnedEffects.empty() && !ChangeE1) {
             ImGui::TextColored(ImVec4(0, 1, 0, 1), reinterpret_cast<const char*>(u8"炼金效果"));  // RGBA    Alchemy Effects
@@ -662,7 +911,14 @@ void __stdcall UI::MCP::Render() {
     ImGui::BeginChild("Scrolling");
     
     ImGui::Text("");
-    ImGui::Text(reinterpret_cast<const char*>(u8"设置获取法术制作书的金币成本："));//Gold Cost to Aquire
+    if (ImGui::Button(reinterpret_cast<const char*>(u8"显示有多少 ESL 标记效果被特别保存"))) {
+        CallPapyrusFunction("ShowHowManySaved", RE::MakeFunctionArguments());
+    }
+    ImGui::Text(reinterpret_cast<const char*>(u8"如果数值过高（600+），可能会导致加载时间延长几秒钟。"));
+    ImGui::Text(reinterpret_cast < const char*>(u8"此外，还可能存在稳定性问题。我建议数值保持在 350 以下。（你可以通过移除法术来降低数值）"));
+
+    ImGui::Text("");
+    ImGui::Text(reinterpret_cast<const char*>(u8"设定获取制作书所需的金币数量："));
     ImGui::InputInt(reinterpret_cast<const char*>(u8"金币成本"), &tomeCost, 10, 100);//Gold Cost
     ImGui::Text("");
 
@@ -713,6 +969,7 @@ void OnMessage(SKSE::MessagingInterface::Message* message) {
         }
     }
      else if (message->type == SKSE::MessagingInterface::kPostLoadGame) {
+        CallPapyrusFunction("GetArrays", RE::MakeFunctionArguments());
         UI::MCP::GotSettings = false;
         RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
         constexpr std::string_view kNameId = "EM03ID_"sv;
